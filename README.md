@@ -9,7 +9,7 @@ This method provide an efficient way to combine specialized baisc image feature 
 
 This method achieved high accuracy for some early time dataset, e.g. Caltech101. Although this framework might not work well on the more challenging datasets (no reports are available). This method provides a very intepertable classifier and might works well on image data that focuses on the target object. 
 
-## Dev Log
+## Dev Log (Under Construction)
 
 10/15:  Init
 
