@@ -2,7 +2,7 @@
 
 ## Introduction
 
-This is a genetic programming based computational framework for constructing Evolution-COnstructed (ECO) features for object detection. This method was initially proposed by Lillywhite et al. (2013) and extended by Zayyan et al. (2018). 
+This is a genetic programming based computational framework for constructing Evolution-COnstructed (ECO) features for object detection. This method was initially proposed by __Lillywhite et al. (2013)__ and extended by __Zayyan et al. (2018)__. 
 
 
 This method provide an efficient way to combine specialized baisc image feature filters to build a more complex image feature extractors. The compound feature extractors can be used for training weak classifiers such as perceptron, SVM, ANN etc. which can then be boosted to a stronger classifer. 
