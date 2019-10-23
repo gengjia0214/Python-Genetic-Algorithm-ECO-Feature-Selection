@@ -21,6 +21,8 @@ This method achieved high accuracy for some early time dataset, e.g. Caltech101.
 
 10/21:  Implemented the population operator.
 
+10/23:  Added mutation function for creature patch coors; Added reproduce related functions.
+
 ## Reference
 
 [1] Lillywhite, K., Lee, D.-J., Tippetts, B., & Archibald, J. (2013). A feature construction method for general object recognition. _Pattern Recognition_, 46, 3300–3314.
