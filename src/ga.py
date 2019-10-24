@@ -1,5 +1,5 @@
 import numpy as np
-from src.models.eco import transformer as tfm
+from src import transformer as tfm
 import random
 import cv2 as cv
 import os
