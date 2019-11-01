@@ -23,6 +23,13 @@ This method achieved high accuracy for some early time dataset, e.g. Caltech101.
 
 10/23:  Added mutation function for creature patch coors; Added reproduce related functions.
 
+10/31:  Fixed a bug. Now the child will have at least 1 gene from parent 1 and ata most all gene from the 2 parents.
+
+10/31:  Refactored the train/validate and lock strategy. Perceptron now using early stopping.
+
+11/1:   Added a method to save & load the params into/from json file
+
+
 ## Reference
 
 [1] Lillywhite, K., Lee, D.-J., Tippetts, B., & Archibald, J. (2013). A feature construction method for general object recognition. _Pattern Recognition_, 46, 3300–3314.
