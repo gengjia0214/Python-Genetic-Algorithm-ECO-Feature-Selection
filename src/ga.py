@@ -1,7 +1,9 @@
+from src.models.eco import transformer as tfm
 import numpy as np
-from src import transformer as tfm
-import random
 import cv2 as cv
+import random
+import json
+import copy
 import os
 
 """
@@ -13,7 +15,18 @@ Dev Log
         score
 10/21:  Implemented the population operator.
 10/23:  Added mutation function for creature patch coors; Added reproduce related functions.
+10/24:  Use deep copy instead of shallow copy for cross operation. Implement process report bar.
+10/24:  Seems like just use the edge will very easily converge during the training param = [0.5984, 1] (make sense 
+cause it is linear separable) but it does not perform well for validating set.
+10/31:  Fixed a bug. Now the child will have at least 1 gene from parent 1 and ata most all gene from the 2 parents.
+10/31:  Refactored the train/validate and lock strategy. Perceptron now using early stopping.
+11/1:   Added a method to save & load the params into/from json file
 """
+
+
+# TODO: after the crossing or the mutate of the crop, the kernel size might not suit the sub-patch size any more.
+# TODO: will this cause problem? Maybe add a checking, if the it is oversize, then regenerate the params, or use the
+#  largest kernel size.
 
 
 class Creature:
@@ -47,26 +60,9 @@ class Creature:
         # TODO: customized cats in the future
         self.weights = np.zeros((4, self.height * self.width + 1))
         self.chromosome = []
-        self.fitness_score = None
+        self.fitness_score = {'0': 0, '1': 0, '2': 0, '3': 0, 'avg': 0}
         self.confusion = np.zeros((4, 4), dtype=np.int16)
         self.lock = False
-        self.survive = True
-
-    def give_birth(self):
-        """
-        # TODO: decide whether use the shallow chromosome copy or deep copy. Currently use shallow.
-        # TODO: shallow should be fine as the parent generation's info will be saved before the new generations
-        Return a child creature that have same setup as the parent creature except for the weights, etc.
-        Child's chromosome will be a shallow copy from the parent.
-        I.E. list objects are different object but the tfm elements in the list are shared between parents and child
-        :return:
-        """
-        child = Creature(self.img_shape)
-        child.x1, child.x2, child.y1, child.y2 = self.x1, self.x2, self.y1, self.y2
-        child.height, child.width = self.height, self.width
-        child.weights = np.zeros((4, self.height * self.width + 1))
-        child.chromosome = self.chromosome.copy()  # shallow copy, tfm objects in the list are shared between generation
-        return child
 
     def build_chromosome(self, gene_pool_size=17, length_limit=8):
         """
@@ -74,8 +70,8 @@ class Creature:
         :return:
         """
 
-        n = random.randrange(1, length_limit+1)  # n is the chromosome length
-        gene_seq = random.sample(range(1, gene_pool_size+1), n)  # randomly take n gene from the pool
+        n = random.randrange(1, length_limit + 1)  # n is the chromosome length
+        gene_seq = random.sample(range(1, gene_pool_size + 1), n)  # randomly take n gene from the pool
 
         for gene in gene_seq:
             self.chromosome.append(self.create_tfm(gene))  # build the chromosome using the randomly generated gene
@@ -106,8 +102,14 @@ class Creature:
         self.y1, self.y2 = min(self.y1, self.y2), max(self.y1, self.y2)
         self.height, self.width = self.x2 - self.x1, self.y2 - self.y1
 
-        # mutate the gene
+        # need to reset the weights after mutate
+        self.reset_weights()
+
+        # check the gene's width and height and mutate the gene
+        # TODO: Add a checking method to check the kernel size matching
         for gene in self.chromosome:
+            gene.width = self.width
+            gene.height = self.height
             gene.mutate(r=r)
 
     def reset_confusion(self):
@@ -124,7 +126,7 @@ class Creature:
         """
 
         self.unlock_weights()  # when reset the weight, also need to unlock the weights
-        self.weights = np.zeros((4, self.height*self.width + 1))
+        self.weights = np.zeros((4, self.height * self.width + 1))
 
     def lock_weights(self):
         """
@@ -153,7 +155,7 @@ class Creature:
         if img.dtype != np.uint8:
             raise Exception("Input Image need to be unit8 but was {}".format(img.dtype))
 
-        img = (img/255).astype(np.float32)
+        img = (img / 255).astype(np.float32)
         sub_patch = img[self.x1:self.x2, self.y1:self.y2]
         for processor in self.chromosome:
             sub_patch = processor.transform(sub_patch)
@@ -167,7 +169,52 @@ class Creature:
         :param img: input processed image, no need to be flattened
         :param label: ground truth label
         :param lr: learning rate
-        :return:
+        :return: void
+        """
+
+        # does not train on locked perceptron
+        if self.lock:
+            pass
+
+        # make prediction
+        predicted_cat, arr = self.predict(img, label)
+
+        # update the confusion matrix
+        self.confusion[label, predicted_cat] += 1
+
+        # update weights if the prediction is wrong
+        # if the weights are locked, this become validation
+        if label != predicted_cat:
+            sign = np.zeros((4, 1))  # no update for the true negatives
+            sign[predicted_cat] = -1  # punish the false positive
+            sign[label] = 1  # increase the weight for false negative
+            update = np.vstack((arr, arr, arr, arr)) * sign
+            self.weights = self.weights + lr * update  # do not normalize the weight
+
+    def validate_perceptron(self, img: np.ndarray, label):
+        """
+        Validate the perceptron
+        :param img: input image
+        :param label: truth
+        :return: void
+        """
+
+        # must lock the weights before validate
+        if not self.lock:
+            raise Exception("Weight need to be locked before validation!")
+
+        # make prediction
+        predicted_cat, arr = self.predict(img, label)
+
+        # update the confusion matrix
+        self.confusion[label, predicted_cat] += 1
+
+    def predict(self, img: np.ndarray, label):
+        """
+        Validate the perceptron on a img
+        :param img: input image
+        :param label: truth
+        :return: predict cat
         """
 
         # apply filters
@@ -182,22 +229,11 @@ class Creature:
         bias = np.ones(1)
         arr = subpatch.flatten()
         arr = np.hstack((arr, bias))  # need to append a bias node
-
         # compute scores and prediction
         scores = self.weights @ arr
         predicted_cat = np.argmax(scores)
 
-        # update weights if the prediction is wrong
-        # if the weights are locked, this become validation
-        if not self.lock and label != predicted_cat:
-            sign = np.zeros((4, 1))  # no update for the true negatives
-            sign[predicted_cat] = -1  # punish the false positive
-            sign[label] = 1  # increase the weight for false negative
-            update = np.vstack((arr, arr, arr, arr)) * sign
-            self.weights = self.weights + lr * update  # do not normalize the weight
-
-        # update the confusion matrix
-        self.confusion[label, predicted_cat] += 1
+        return predicted_cat, arr
 
     def compute_fitness(self):
         """
@@ -213,14 +249,21 @@ class Creature:
         tn = - 1 * (tp + fp + fn) + self.confusion.sum()  # tn are the sum of the rest grids
 
         # precision
-        precision = tp/(fn + tp)
+        precision = tp / (fn + tp)
 
         # true negative rate (need to be normalized by # of cats - 1)
-        tn_norm = tn/3
-        tn_rate = tn_norm/(fp + tn_norm)
+        tn_norm = tn / 3
+        tn_rate = tn_norm / (fp + tn_norm)
 
-        # score need to be normalized by # of cat
-        self.fitness_score = np.sum(precision + tn_rate) * 125  # score ranged from 0 to 1000
+        # fitness by cat
+        fitness_score_by_cat = (precision + tn_rate) * 500
+        self.fitness_score['0'] = fitness_score_by_cat[0]
+        self.fitness_score['1'] = fitness_score_by_cat[1]
+        self.fitness_score['2'] = fitness_score_by_cat[2]
+        self.fitness_score['3'] = fitness_score_by_cat[3]
+
+        # overall score need to be normalized by # of cat
+        self.fitness_score['avg'] = np.sum(precision + tn_rate) * 125  # score ranged from 0 to 1000
 
     def info(self):
         """
@@ -231,8 +274,17 @@ class Creature:
         compute_fitness score
         :return: a list of string that describe the creature
         """
-        info = {"patch": (self.x1, self.x2, self.y1, self.y2), "genes": {x.code: x.params for x in self.chromosome},
-                "weights": self.weights, "compute_fitness": self.fitness_score}
+
+        img_shape = self.img_shape
+        patch = (self.x1, self.x2, self.y1, self.y2)
+        height, width = self.height, self.width
+        genes = [{'code': x.code, 'params': x.params, 'h': x.height, 'w': x.width} for x in self.chromosome]
+        weights = self.weights
+        confusion = self.confusion
+        fitness_score = self.fitness_score
+        info = {'img_shape': img_shape, 'patch': patch, 'height': height, 'width': width, 'genes': genes, 'weights':
+                weights.tolist(), 'confusion': confusion.tolist(), 'fitness': fitness_score}
+
         return info
 
     def create_tfm(self, gene):
@@ -242,44 +294,7 @@ class Creature:
         :return: transformer with random parameters
         """
 
-        # TODO: include several more tfms
-        if gene == 1:
-            x = tfm.AdaptiveThreshold(width=self.width, height=self.height)
-        elif gene == 2:
-            x = tfm.CannyEdge(width=self.width, height=self.height)
-        elif gene == 3:
-            x = tfm.CensusTransformation(width=self.width, height=self.height)
-        elif gene == 4:
-            x = tfm.CLAHistogram(width=self.width, height=self.height)
-        elif gene == 5:
-            x = tfm.DifferenceGaussian(width=self.width, height=self.height)
-        elif gene == 6:
-            x = tfm.Dilate(width=self.width, height=self.height)
-        elif gene == 7:
-            x = tfm.DistanceTransformation(width=self.width, height=self.height)
-        elif gene == 8:
-            x = tfm.Erode(width=self.width, height=self.height)
-        elif gene == 9:
-            x = tfm.GaussianBlur(width=self.width, height=self.height)
-        elif gene == 10:
-            x = tfm.Gradient(width=self.width, height=self.height)
-        elif gene == 11:
-            x = tfm.HarrisCorner(width=self.width, height=self.height)
-        elif gene == 12:
-            x = tfm.HistogramEqualization(width=self.width, height=self.height)
-        elif gene == 13:
-            x = tfm.IntegralTransformation(width=self.width, height=self.height)
-        elif gene == 14:
-            x = tfm.LaplacianEdge(width=self.width, height=self.height)
-        elif gene == 15:
-            x = tfm.Log(width=self.width, height=self.height)
-        elif gene == 16:
-            x = tfm.MediumBlur(width=self.width, height=self.height)
-        elif gene == 17:
-            x = tfm.SquareRoot(width=self.width, height=self.height)
-        else:
-            raise Exception("Invalid Gene Number {}".format(gene))
-        return x
+        return tfm.Transformer.get_tfm(self.width, self.height, gene=gene)
 
 
 class PopulationOperator:
@@ -292,8 +307,7 @@ class PopulationOperator:
     4 - report -> report the population
     5 - eliminate population -> all underperformed creatures will be removed from population
     6 - update report? -> add one line of survived creatures?
-    7 - reproduce ->  generate a new generation via a series of select -> cross -> mutate
-    8 - reset_population_weights
+    7 - reproduce ->  generate a new generation via a series of select -> cross -> mutate (also reset weights)
     8 - ... (go to step 2)
     """
 
@@ -308,20 +322,25 @@ class PopulationOperator:
         # generate a population of creatures
         population = []
         for i in range(num):
-            population.append(Creature(img_shape=img_shape))
+            creature = Creature(img_shape=img_shape)
+            creature.build_chromosome()
+            population.append(creature)
         return population
 
     @staticmethod
-    def train_population(population: list, train_data: list, src_dir: str, epoch_num=100, lr=1):
+    def train_population(population: list, train_data: list, src_dir: str, e, epoch_limit=100, lr=1, silence=False):
         """
         Train the population.
         # TODO: in the future, implement an epoch report, show avg confusion matrix stats
         # TODO: in the future, store the midway results in case the training get interrupted
         :param population: population
         :param train_data: list of the training data in tuple format [(id, cat)]. id and cat must be int
+        :param e: stopping coefficient: intuitively, how many improvement (%) do you if you made 100 errors in two
+        consecutive training iterations
         :param src_dir: the directory for placing the training images
-        :param epoch_num: number of iterations for the training the perceptron
+        :param epoch_limit: number of iterations for the training the perceptron
         :param lr: learning rate
+        :param silence: whether report the training stats
         :return: void
         """
 
@@ -330,21 +349,38 @@ class PopulationOperator:
             creature.reset_weights()
 
         # train perceptron for each creature
-        for i in range(epoch_num):
+        n = len(population)
+        error_prev, error_curr = np.full((500,), fill_value=100), np.zeros((500,))
+        for i in range(epoch_limit):
+
             # reset the confusion matrix for each creature at the beginning of each training epoch
-            # TODO: confusion matrix does not need to be updated/reset during the training period
-            # TODO: or it does need to be reset to provide report on per training iteration
+            print("Training Epoch = {}\n".format(i))
             PopulationOperator.reset_population_confusion(population)
 
             # train on each data entry
-            for entry in train_data:
-                img_id = entry[0]
-                label = entry[1]
+            for j in range(len(train_data)):
+                img_id = train_data[j][0]
+                label = train_data[j][1]
                 img_path = os.path.join(src_dir, "{}.png".format(img_id))
                 img = cv.cvtColor(cv.imread(img_path), cv.COLOR_BGR2GRAY)
                 for creature in population:
                     # TODO: in the future implement more classifier e.g. SVM, KNN etc
                     creature.train_perceptron(img=img, label=label, lr=lr)  # train perceptron
+
+            # early stop
+            for k, creature in enumerate(population):
+                if not creature.lock:
+                    error_curr[k] = n - np.sum(creature.confusion.diagonal())
+                    # intuitively, theta is how many improvement do you need for
+                    theta = abs(error_curr[k] - error_prev[k]) * 2 / ((error_prev[k] + error_curr[k]) + 10e-6)
+                    if theta < e and i > 5:
+                        creature.lock_weights()
+                        print("Creature {} weights locked at epoch {}. Error {}".format(k, i, error_curr[k]/n))
+                    error_prev[k] = error_curr[k]
+
+            # report for the current epoch
+            if not silence:
+                PopulationOperator.report(population)
 
         # when training is done, lock the weights of each creature
         for creature in population:
@@ -385,31 +421,55 @@ class PopulationOperator:
             img = cv.cvtColor(cv.imread(img_path), cv.COLOR_BGR2GRAY)
             for creature in population:
                 # TODO: in the future implement more classifier e.g. SVM, KNN etc
-                creature.train_perceptron(img=img, label=label, lr=1)  # validate perceptron
+                creature.validate_perceptron(img=img, label=label)  # validate perceptron
 
         # compute the compute_fitness scores for creatures in population
         for creature in population:
             creature.compute_fitness()
 
+        print("Validation done.")
+        PopulationOperator.report(population)
+
     @staticmethod
-    def eliminate_population(population: list, t=0.25):
+    def eliminate_population(population: list, mode, t=0.25):
         """
-        # TODO: need to decide whether use hard threshold or the flexible threshold (i.e. eliminate lowest 25%)
-        # TODO: hard threshold could prevent some bad gene contamination
-        # TODO: for now, eliminate lowest 25%.
+        # TODO: compare two strategy
+        # TODO: strategy - 0: eliminate lowest t by overall fitness score
+        # TODO: strategy - 1: eliminate lowest t by keeping top p% of good performer from each cat
+        # TODO: strategy - 1 should always give a good solution as they will be boosted at the end
+        # TODO: uninformative prior -> keep top (1 - sqrt(sqrt(t))) from each class
+        # TODO: strategy - 2: combine two -> keep t -> alpha portion of t from top performer rest from each class
         Eliminate the underperformed creatures in place.
         Due to the current fitness score set up, the validating data need to be balanced, otherwise it could be bias
         to the dominate cat.
         :param population: population of creatures
+        :param mode: 0: eliminate overall bad performer by threshold; 1: keep % of the good performer by each cat
         :param t: threshold
         :return:
         """
 
         # remove the last
-        population.sort(key=lambda x: x.fitness_score, reverse=True)  # O(nlgn)
-        n = int(len(population) * t)
-        for i in range(n):
-            population.pop()  # pop last item is O(1)
+        if mode == '0':
+            population.sort(key=lambda x: x.fitness_score['overall'], reverse=True)  # O(nlgn)
+            n = int(len(population) * t)
+            for i in range(n):
+                population.pop()  # pop last item is O(1)
+        elif mode == '1':
+            p = np.sqrt(np.sqrt(t))
+            keep_num = int(round(len(population) * (1 - p)))
+            collector = []
+            for i in range(4):
+                cat = str(i)
+                population.sort(key=lambda x: x.fitness_score[cat], reverse=True)
+                for gene in population[:keep_num + 1]:
+                    if gene not in collector:
+                        collector.append(gene)
+            population[:] = collector
+        else:
+            raise Exception("Mode must be '0': eliminate by overall fitness; '1': by cat but was {}".format(mode))
+
+        print("Eliminated bad performers, now have {} in pool".format(len(population)))
+        PopulationOperator.report(population)
 
     @staticmethod
     def reproduce(parents_pool: list, num, cross_rate=0.9, mutate_rate=0.0005):
@@ -449,7 +509,7 @@ class PopulationOperator:
             fit2 = population[idx2].fitness_score
 
             # Tournament
-            if np.random.choice(2, 1, p=[1-p, p]) == 1:
+            if np.random.choice(2, 1, p=[1 - p, p]) == 1:
                 p_idx[i] = idx1 if fit1 > fit2 else idx2
             else:
                 p_idx[i] = idx1 if fit1 < fit2 else idx2
@@ -471,22 +531,22 @@ class PopulationOperator:
 
         # if cross does not happen, take the first random parent to the next generation
         # child is a new creature object but with shared tmf objects in chromosome lis
+
         n1, n2 = len(parent1.chromosome), len(parent2.chromosome)
-        child = parent1.give_birth()
+        child = copy.deepcopy(parent1)  # deep copy
 
-        if np.random.choice(2, 1, p=[1-cross_rate, cross_rate]) == 1:
-            # first parent for the first half, second parent for the remaining half slice ~ [0, n-1]
-            # since slice ~ [0, n] -> range(0) ~ range(n) at least pop 0 out, at most pop n-1 out
-            # this guarantee that the children at least have one gene from the parents
-            slice1, slice2 = random.randrange(n1), random.randrange(n2)
-
-            # pop the gene after cp1 from the first parent
-            for i in range(slice1):
+        if np.random.choice(2, 1, p=[1 - cross_rate, cross_rate]) == 1:
+            # first parent for the first half, second parent for the remaining half
+            # need to make sure at least one element from each parent
+            # at most get all the elements from both parents
+            slice1 = random.randrange(n1)  # slice1 ~ [0, n1-1]
+            for i in range(slice1):  # pop out [0 ~ n1-1] number of elements
                 child.chromosome.pop()
 
-            # pop the gene after cp2 from parent2 then append to first parent
-            for i in range(slice2):
-                child.chromosome.append(parent2.chromosome.pop())  # O(1) for pop the last item
+            # append gene from parent2 to the child
+            slice2 = random.randrange(n2 + 1)  # slice2 ~ [0, n2]
+            if slice2 != 0:
+                child.chromosome = child.chromosome + copy.deepcopy(parent2.chromosome[-slice2:])
 
         # children's weights shape should match with patch shape, all weights are 0 and unlocked.
         child.mutate(r=mutate_rate)
@@ -505,20 +565,70 @@ class PopulationOperator:
             creature.reset_confusion()
 
     @staticmethod
-    def output_model(population):
-        # TODO: out put the whole model: creature gene, params, weights, fitness score, confusion matrix
-        # TODO: maybe the weights and confusion matrix in separated .npy file
-        pass
+    def save_population(population, dst_file):
+        meta_data = []
+        for creature in population:
+            meta_data.append(creature.info())
+
+        with open(dst_file, 'w') as f:
+            json.dump(meta_data, f)
+
+        print("Model params saved at {}".format(dst_file))
 
     @staticmethod
-    def report(population):
-        # TODO: report the validation results?
-        pass
+    def load_population(src_file):
+        """
+        Load a population from a json file
+        :param src_file:
+        :return:
+        """
 
+        loaded_population = []
 
-a = Creature(img_shape=(49, 49))
-a.build_chromosome()
-b = a.give_birth()
+        with open(src_file, 'r') as f:
+            meta_data = json.load(f)
+        for creature_info in meta_data:
+            creature = Creature(img_shape=(10, 10))
+            creature.img_shape = tuple(creature_info['img_shape'])
+            creature.x1, creature.x2, creature.y1, creature.y2 = creature_info['patch']
+            creature.height = creature_info['height']
+            creature.width = creature_info['width']
+            for gene in creature_info['genes']:
+                code = gene['code']
+                params = gene['params']
+                h, w = gene['h'], gene['w']
+                tfm_x = tfm.Transformer.get_tfm(width=w, height=h, gene=code)
+                tfm_x.params = params
+                tfm_x.code = code
+                creature.chromosome.append(tfm_x)
+            creature.weights = np.asarray(creature_info['weights'])
+            creature.confusion = np.asarray(creature_info['confusion'])
+            creature.fitness_score = creature_info['fitness']
+            loaded_population.append(creature)
+        print("All {} creatures loaded.".format(len(meta_data)))
+        return loaded_population
 
-print(a.chromosome)
-print(b.chromosome)
+    @staticmethod
+    def report(population: list):
+        """
+        Report the best precision, recall from a population
+        :param population:
+        :return:
+        """
+        precision = np.array([0, 0, 0, 0], dtype=np.float32)
+        recall = np.array([0, 0, 0, 0], dtype=np.float32)
+        for creature in population:
+            tp = creature.confusion.diagonal()  # tp on diagonal
+            fp = np.sum(creature.confusion, axis=0) - tp  # fp are each column sum minus the tp
+            fn = np.sum(creature.confusion, axis=1) - tp  # fn are each row sum minus the tp
+            temp_precision = np.round(tp / (fp + tp + 0.001), 4)  # in case the nan value
+            temp_recall = np.round(tp / (tp + fn + 0.001), 4)  # in case the nan value
+            precision = np.maximum(temp_precision, precision)
+            recall = np.maximum(temp_recall, recall)
+        print("{:>10}: {:>10} {:>10} {:>10} {:>10}".format("Class", 0, 1, 2, 3))
+        print("{:>10}: {:>10} {:>10} {:>10} {:>10}".format("Precision", precision[0], precision[1],
+                                                           precision[2], precision[3]))
+        print("{:>10}: {:>10} {:>10} {:>10} {:>10}".format("Recall", recall[0], recall[1], recall[2],
+                                                           recall[3]))
+        print("-------------------------------------------------------\n")
+
