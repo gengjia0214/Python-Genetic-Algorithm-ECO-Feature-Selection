@@ -25,9 +25,9 @@ cause it is linear separable) but it does not perform well for validating set.
 
 
 # TODO: after the crossing or the mutate of the crop, the kernel size might not suit the sub-patch size any more.
-# TODO: will this cause problem? Maybe add a checking, if the it is oversize, then regenerate the params, or use the
+#  will this cause problem? Maybe add a checking, if the it is oversize, then regenerate the params, or use the
 #  largest kernel size.
-
+# TODO: Implement the perceptron binary strategy (low priority)
 
 class Creature:
     """
@@ -162,9 +162,27 @@ class Creature:
 
         return sub_patch
 
-    def train_perceptron(self, img: np.ndarray, label, lr=1):
+    def train_perceptron_binary(self, img: np.ndarray, label, lr=1):
         """
-        Train the perceptron for one entry.
+        Train the perceptron for one entry. Using multiple binary perceptron strategy
+        Also for validate the perceptron
+        :param img: input processed image, no need to be flattened
+        :param label: ground truth label
+        :param lr: learning rate
+        :return: void
+        """
+
+        # TODO: implement the binary strategy
+        # does not train on locked perceptron
+        if self.lock:
+            pass
+
+        # make prediction
+        predicted_cat, arr = self.predict(img, label)
+
+    def train_perceptron_multiclass(self, img: np.ndarray, label, lr=1):
+        """
+        Train the perceptron for one entry using multiclass strategy
         Also for validate the perceptron
         :param img: input processed image, no need to be flattened
         :param label: ground truth label
@@ -177,7 +195,7 @@ class Creature:
             pass
 
         # make prediction
-        predicted_cat, arr = self.predict(img, label)
+        predicted_cat, arr = self.predict(img, mode='multiclass_perceptron_train')
 
         # update the confusion matrix
         self.confusion[label, predicted_cat] += 1
@@ -204,16 +222,16 @@ class Creature:
             raise Exception("Weight need to be locked before validation!")
 
         # make prediction
-        predicted_cat, arr = self.predict(img, label)
+        predicted_cat = self.predict(img, label)
 
         # update the confusion matrix
         self.confusion[label, predicted_cat] += 1
 
-    def predict(self, img: np.ndarray, label):
+    def predict(self, img: np.ndarray, mode='multiclass_perceptron_predict'):
         """
         Validate the perceptron on a img
         :param img: input image
-        :param label: truth
+        :param mode: 'multiclass_perceptron_predict', 'multiclass_perceptron_train', 'binary_perceptron'
         :return: predict cat
         """
 
@@ -230,10 +248,27 @@ class Creature:
         arr = subpatch.flatten()
         arr = np.hstack((arr, bias))  # need to append a bias node
         # compute scores and prediction
-        scores = self.weights @ arr
-        predicted_cat = np.argmax(scores)
+        if mode == 'multiclass_perceptron_predict' or mode == 'multiclass_perceptron_train':
+            scores = self.weights @ arr
+            predicted_cat = np.argmax(scores)
+        elif mode == 'binary_perceptron':
+            score = self.weights[0] @ arr
+            if score > 0:
+                predicted_cat = 0
+            else:
+                score = self.weights[1] @ arr
+                if score > 0:
+                    predicted_cat = 3
+                else:
+                    score = self.weights[2] @ arr
+                    predicted_cat = 1 if score > 0 else 2
+        else:
+            raise Exception('Mode must be either \'multiclass\' or \'binary\' but was {}'.format(mode))
 
-        return predicted_cat, arr
+        if mode == 'multiclass_perceptron_train':
+            return predicted_cat, arr
+        else:
+            return predicted_cat
 
     def compute_fitness(self):
         """
@@ -365,7 +400,7 @@ class PopulationOperator:
                 img = cv.cvtColor(cv.imread(img_path), cv.COLOR_BGR2GRAY)
                 for creature in population:
                     # TODO: in the future implement more classifier e.g. SVM, KNN etc
-                    creature.train_perceptron(img=img, label=label, lr=lr)  # train perceptron
+                    creature.train_perceptron_multiclass(img=img, label=label, lr=lr)  # train perceptron
 
             # early stop
             for k, creature in enumerate(population):
@@ -505,10 +540,15 @@ class PopulationOperator:
         for i in range(2):
             idx1 = random.randrange(n)
             idx2 = random.randrange(n)
-            fit1 = population[idx1].fitness_score
-            fit2 = population[idx2].fitness_score
 
-            # Tournament
+            # Tournament based on random criteria
+            criteria = random.randrange(5)
+            if criteria == 4:
+                criteria = 'avg'
+            else:
+                criteria = str(criteria)
+            fit1 = population[idx1].fitness_score[criteria]
+            fit2 = population[idx2].fitness_score[criteria]
             if np.random.choice(2, 1, p=[1 - p, p]) == 1:
                 p_idx[i] = idx1 if fit1 > fit2 else idx2
             else:

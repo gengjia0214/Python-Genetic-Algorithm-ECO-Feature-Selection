@@ -1,3 +1,4 @@
+from scipy.stats import invgamma
 import numpy as np
 import cv2 as cv
 import random
@@ -14,7 +15,7 @@ Dev Log
 11/1    Refactored some methods. Added a decode method that make the params compatible for json
 """
 
-# TODO: need to encode the params so that it can be save into json file
+
 # TODO: Hough Lines and Hough Circles could also be useful. But need to figure out a way to integrate
 # TODO: Gabor Filter could be useful
 # TODO: Adaptive Threshold C param
@@ -103,6 +104,10 @@ class Transformer:
             x = MediumBlur(width=width, height=height)
         elif gene == 17:
             x = SquareRoot(width=width, height=height)
+        elif gene == 18:
+            x = Gabor(width=width, height=height)
+        elif gene == 19:
+            x = HoughCircle(width=width, height=height)
         else:
             raise Exception("Invalid Gene Number {}".format(gene))
 
@@ -221,7 +226,6 @@ class CannyEdge(Transformer):
             raise Exception("Input should be {} but was {}".format(np.float32, img.dtype))
 
         thresh, _ = cv.threshold(img_8u, thresh=0, maxval=255, type=(cv.THRESH_BINARY + cv.THRESH_OTSU))
-
         mask = cv.Canny(img_8u, threshold1=int(thresh * 0.1), threshold2=int(thresh * self.params[0]))
         return img * (mask == 255)
 
@@ -499,6 +503,7 @@ class DifferenceGaussian(Transformer):
         """
         Constructor.
         Two random param: sigma value and the aspect ratio between two sigmas
+        The rule is that the kernel size need to be 3 * sigma while smaller than the patch size
         :param width:
         """
 
@@ -561,6 +566,8 @@ class GaussianBlur(Transformer):
         """
         Constructor
         One random param: sigma
+        The kernel size is three times of the sigma
+        The kernel size should not be larger than the patch
         :param width: image width
         """
         Transformer.__init__(self, width, height)
@@ -945,4 +952,130 @@ class SquareRoot(Transformer):
         img[img < 0] = 1e-6
 
         return np.sqrt(img)
+
+
+class Gabor(Transformer):
+    """
+    Gabor filter
+    """
+
+    def __init__(self, width, height):
+        """
+        Constructor
+        4 random params
+        - sigma: sigma of the gaussian
+        - theta: orientation
+        - lambd: wavelength
+        - gamma: aspect ratio = 1 means circle, otherwise oval
+        :param width: image width
+        """
+        Transformer.__init__(self, width, height)
+        sigma = random.uniform(1, min(width / 3, 5))
+        ksize = int(3 * sigma)
+        theta = np.pi * random.uniform(0, 1)
+        lambd = random.randrange(3, width // 2)
+        if random.randrange(2) == 1:
+            gamma = random.uniform(0, 1)
+        else:
+            gamma = 1
+        self.params = [ksize, sigma, theta, lambd, gamma]
+        self.code = 18
+
+    def mutate(self, r=0.0005):
+        """
+        Mutate
+        :param r: mutate rate
+        :return: void
+        """
+        if np.random.choice(2, 1, p=[1 - r, r]) == 1:
+            self.params[1] = random.uniform(1, min(self.width // 3, 5))
+            self.params[0] = int(3 * self.params[0])
+        if np.random.choice(2, 1, p=[1 - r, r]) == 1:
+            self.params[2] = np.pi * random.uniform(0, 1)
+        if np.random.choice(2, 1, p=[1 - r, r]) == 1:
+            self.params[3] = random.randrange(3, self.width // 2)
+        if np.random.choice(2, 1, p=[1 - r, r]) == 1:
+            if random.randrange(2) == 1:
+                self.params[4] = random.uniform(0, 1)
+            else:
+                self.params[4] = 1
+
+    def transform(self, img):
+        """
+        Must be performed on float points [0, 1] so that it have meaningful effect.
+        Increase the contrast
+        :param img: input image
+        :return:
+        """
+
+        # check input
+        if img.dtype != np.float32:
+            raise Exception("Input should be {} but was {}".format(np.float32, img.dtype))
+
+        # apply kernel
+        kernel = cv.getGaborKernel(ksize=(self.params[0], self.params[0]), sigma=self.params[1], theta=self.params[
+                2], lambd=self.params[3], gamma=self.params[4], psi=0, ktype=cv.CV_32F)
+        img = cv.filter2D(img, -1, kernel=kernel)
+
+        img = cv.normalize(img, None, 1e-6, 1.0, cv.NORM_MINMAX, cv.CV_32F)
+        return img
+
+#
+# class HoughCircle(Transformer):
+#     """
+#     Hough circles
+#     """
+#     def __init__(self, width, height):
+#         """
+#         Constructor
+#         4 random param
+#         - min_dist_ratio decide minDist
+#         - theta: decide the param1 param2
+#         - min_r_ratio/max_r_ratio: decide the min/max radius
+#         :param width: subpatch width
+#         :param height: subpatch height
+#         """
+#         Transformer.__init__(self, width=width, height=height)
+#         min_dist_ratio = random.uniform(0, 0.2)
+#         theta = random.uniform(0.3, 0.9)
+#         min_r_ratio = random.uniform(0, 0.3)
+#         max_r_ratio = random.uniform(0.3, 0.9)
+#         self.params = [min_dist_ratio, theta, min_r_ratio, max_r_ratio]
+#         self.code = 19
+#
+#     def mutate(self, r=0.0005):
+#         """
+#         Mutate
+#         :param r: mutate rate
+#         :return: void
+#         """
+#         if np.random.choice(2, 1, p=[1 - r, r]) == 1:
+#             self.params[0] = random.uniform(0, 1)
+#         if np.random.choice(2, 1, p=[1 - r, r]) == 1:
+#             self.params[1] = random.uniform(0.3, 0.9)
+#         if np.random.choice(2, 1, p=[1 - r, r]) == 1:
+#             self.params[2] = random.uniform(0, 0.3)
+#         if np.random.choice(2, 1, p=[1 - r, r]) == 1:
+#             self.params[3] = random.uniform(0.3, 0.9)
+#
+#     def transform(self, img):
+#
+#         # check input
+#         if img.dtype != np.float32:
+#             raise Exception("Input should be {} but was {}".format(np.float32, img.dtype))
+#
+#         img_8u = (img * 255).astype(np.uint8)
+#         thresh, _ = cv.threshold(img_8u, thresh=0, maxval=255, type=(cv.THRESH_BINARY + cv.THRESH_OTSU))
+#         thresh = max(1, thresh)
+#         min_dist = max(3, int(self.params[0] * max(self.width, self.height)))
+#         param1, param2 = thresh * 0.1, thresh * self.params[1]
+#         print(param1, param2)
+#         min_r = max(3, int(self.params[2] * min(self.width, self.height)))
+#         max_r = max(3, int(self.params[3] * min(self.width, self.height)) + 1)
+#         circles = cv.HoughCircles(image=img_8u, method=cv.HOUGH_GRADIENT, dp=1, minDist=min_dist, param1=param1,
+#                                   param2=param2, minRadius=min_r, maxRadius=max_r)
+
+3
+
+
 
