@@ -8,7 +8,7 @@ Genetic programming provides an efficient way to combine specialized basic image
 
 ## How does it work?
 
-Some key objects in this framework:
+### Some key objects in this framework:
 
 __Creature__: Creature is the basic ECO feature extraction unit. Creatures are constructed with randomly generated feature filters, and randomly generated coordinates for cropping an image. They are able to crop the input image and apply compound features on the subimage to extract the image features. Creatures can be trained with perceptron/SVN/etc. so that they will become a weak classifier. Here, the creature was implemented as an python object class. The field contains variables such as feature filter functions (chromosomes), cropping coordinates, weights, confusion matrix, etc so that it will be capable of provide essenstial computational functions.
 
@@ -16,7 +16,7 @@ __Chromosomes__: A chromosome is a list of image features.
 
 __Generation__: A generation is a batch of creatures, e.g. 500 randomly generated creatures. 
 
-Pipeline:
+### Pipeline:
 
 __A. Weak Classifiers Generation:__
 
