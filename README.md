@@ -1,7 +1,9 @@
 # Evolution-COnstructed Object Recognition (Under Dev.)
 
 @author: Jia Geng
+
 @email: jxg570@miami.edu  
+
 @website: https://www.linkedin.com/in/jia-geng/
 
 ## Introduction
