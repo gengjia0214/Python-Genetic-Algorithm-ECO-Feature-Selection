@@ -4,6 +4,9 @@ import cv2 as cv
 import random
 
 """
+@author: Jia Geng
+@email: jxg570@miami.edu
+
 Dev Log
 10/15   Current version only support grayscale
 10/16   17 Transformers implemented

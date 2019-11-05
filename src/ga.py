@@ -7,6 +7,9 @@ import copy
 import os
 
 """
+@author: Jia Geng
+@email: jxg570@miami.edu
+ 
 Dev Log
 10/17:  Implemented the Creature Class (still need to implement the perceptron)
 10/19:  Implemented the perceptron classifier and the confusion matrix, fitness score
@@ -25,7 +28,7 @@ cause it is linear separable) but it does not perform well for validating set.
 
 
 # TODO: after the crossing or the mutate of the crop, the kernel size might not suit the sub-patch size any more.
-#  will this cause problem? Maybe add a checking, if the it is oversize, then regenerate the params, or use the
+#  will this cause problem? Maybe add a checking, if it is oversize, then regenerate the params, or use the
 #  largest kernel size.
 # TODO: Implement the perceptron binary strategy (low priority)
 
