@@ -1,5 +1,9 @@
 # Evolution-COnstructed Object Recognition (Under Dev.)
 
+@author: Jia Geng
+@email: jxg570@miami.edu  
+@website: https://www.linkedin.com/in/jia-geng/
+
 ## Introduction
 
 This is a genetic programming based computational framework for constructing Evolution-COnstructed (ECO) features for object detection. This method was initially proposed by __Lillywhite et al. (2013)__ and extended by __Zayyan et al. (2018)__. 
