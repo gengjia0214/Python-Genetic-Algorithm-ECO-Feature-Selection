@@ -27,8 +27,11 @@ __Generation__: A generation is a batch of creatures, e.g. 500 randomly generate
 __A. Weak Classifiers Generation:__
 
 1 - Init: Start with a large population of creatures (1st generation)
+
 2 - Train: Train all creatures on the training data so they become weak classifiers. Validate all the creatures.
+
 3 - Eliminate: Eliminate the underperformed creatures. The rest become parent candidate pool.
+
 4 - Reproduce: Randomly select a pair of creatures from the parent candidate pool. Cross the paresnts chromosome to generate child creature (reproduce). Each children creature have a small chance to mutate (changing the parameters of the filters). Reproduce enough number of children creature as the next generation.
 5 - go to step 2.
 
