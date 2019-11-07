@@ -6,6 +6,39 @@
 
 @website: https://www.linkedin.com/in/jia-geng/
 
+## Dev Log 
+
+Currently the implementation is for my own research so it is specialized for classify 4 different categories (encoded into 0, 1, 2, 3). 
+
+10/15:  Init
+
+10/17:  Implemented the Creature Class (still need to implement the perceptron)
+
+10/19:  Implemented the perceptron classifier and the confusion matrix, fitness score
+
+10/20:  Fixed some bugs. The fitness can be overwhelmed by imbalanced data. 
+
+10/21:  Implemented the population operator.
+
+10/23:  Added mutation function for creature patch coors; Added reproduce related functions.
+
+10/31:  Fixed a bug. Now the child will have at least 1 gene from parent 1 and ata most all gene from the 2 parents.
+
+10/31:  Refactored the train/validate and lock strategy. Perceptron now using early stopping.
+
+11/1:   Added a method to save & load the params into/from json file
+
+## Dev. Plan
+
+This framework is currently under development for my research project. The framework was (and will continue to be) tested on my research project dataset (full dataset will not be released at least in the next two years).
+
+The current weak classifier is multiclass perceptron, regularized simply by early stopping. During the boosting (SAMME), the prediction vote will be ecoded in: 1 for predicted class and -1/(C-1) for other classes. One drawback for the multi-class perceptron is that it assume each class is independed to each other including the boosting stage.
+ 
+- implement MIRA to regularize the perceptron.
+- implement more intepretable weak classifier: logistic regression, which will be compatible for SAMME.R boosting algorithm
+- implement a stronger classifier as weak classifier: SVM
+
+
 ## Introduction
 
 This is a genetic programming based computational framework for constructing Evolution-COnstructed (ECO) features for object detection. This method was initially proposed by __Lillywhite et al. (2013)__ and extended by __Zayyan et al. (2018)__. 
@@ -49,29 +82,6 @@ Besides, this method provides highly intepertable classifiers.
 This method achieved very high accuracy for some early time dataset, e.g. Caltech101. But this framework might not work well on the more challenging datasets, especially when the object of interest does not have a certain location pattern in the image (no reports are available). 
 
 This method might work well on the moving object proposals detected by the moving object algorithms, e.g., background subtraction as it can generate proposals with object of interest on the image center. 
-
-
-## Dev Log 
-
-Currently the implementation is for my own research so it is specialized for classify 4 different categories (encoded into 0, 1, 2, 3). 
-
-10/15:  Init
-
-10/17:  Implemented the Creature Class (still need to implement the perceptron)
-
-10/19:  Implemented the perceptron classifier and the confusion matrix, fitness score
-
-10/20:  Fixed some bugs. The fitness can be overwhelmed by imbalanced data. 
-
-10/21:  Implemented the population operator.
-
-10/23:  Added mutation function for creature patch coors; Added reproduce related functions.
-
-10/31:  Fixed a bug. Now the child will have at least 1 gene from parent 1 and ata most all gene from the 2 parents.
-
-10/31:  Refactored the train/validate and lock strategy. Perceptron now using early stopping.
-
-11/1:   Added a method to save & load the params into/from json file
 
 
 ## Reference
