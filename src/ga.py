@@ -24,12 +24,14 @@ cause it is linear separable) but it does not perform well for validating set.
 10/31:  Fixed a bug. Now the child will have at least 1 gene from parent 1 and ata most all gene from the 2 parents.
 10/31:  Refactored the train/validate and lock strategy. Perceptron now using early stopping.
 11/1:   Added a method to save & load the params into/from json file
+11/4:   Refactored the method. Now is compatible for any defined number of classes
 """
 
 
-# TODO: after the crossing or the mutate of the crop, the kernel size might not suit the sub-patch size any more.
-#  will this cause problem? Maybe add a checking, if it is oversize, then regenerate the params, or use the
+# TODO: after the crossing or mutating the crop, the kernel size might not suit the sub-patch size any more.
+#  will this cause problem? Maybe add a checking step, if it is oversize, then regenerate the params, or use the
 #  largest kernel size.
+
 # TODO: Implement the perceptron binary strategy (low priority)
 
 class Creature:
@@ -38,13 +40,14 @@ class Creature:
     image
     """
 
-    def __init__(self, img_shape: tuple):
+    def __init__(self, img_shape: tuple, num_cat=4):
         """
         Constructor.
         Create a creature with random patch window and empty chromosome
         :param img_shape: original image size (height x weight)
         """
 
+        self.num_cat = num_cat
         self.img_shape = img_shape
         # sub-patch should be at least 3x3
         # below could use some memory if the image is large?
@@ -60,11 +63,12 @@ class Creature:
         self.height, self.width = self.x2 - self.x1, self.y2 - self.y1
 
         # TODO: need a better initialization?
-        # TODO: customized cats in the future
-        self.weights = np.zeros((4, self.height * self.width + 1))
+        self.weights = np.zeros((self.num_cat, self.height * self.width + 1))
         self.chromosome = []
-        self.fitness_score = {'0': 0, '1': 0, '2': 0, '3': 0, 'avg': 0}
-        self.confusion = np.zeros((4, 4), dtype=np.int16)
+        self.fitness_score = {'avg': 0}
+        for i in range(self.num_cat):
+            self.fitness_score[str(i)] = 0
+        self.confusion = np.zeros((self.num_cat, self.num_cat), dtype=np.int16)
         self.lock = False
 
     def build_chromosome(self, gene_pool_size=17, length_limit=8):
@@ -120,7 +124,7 @@ class Creature:
         Reset the confusion matrix and the weights
         :return:
         """
-        self.confusion = np.zeros((4, 4), dtype=np.int16)
+        self.confusion = np.zeros((self.num_cat, self.num_cat), dtype=np.int16)
 
     def reset_weights(self):
         """
@@ -129,7 +133,7 @@ class Creature:
         """
 
         self.unlock_weights()  # when reset the weight, also need to unlock the weights
-        self.weights = np.zeros((4, self.height * self.width + 1))
+        self.weights = np.zeros((self.num_cat, self.height * self.width + 1))
 
     def lock_weights(self):
         """
@@ -147,14 +151,13 @@ class Creature:
 
         self.lock = False
 
-    def process(self, img):
+    def __process(self, img):
         """
         Process image using sequence of filters
         :param img: input image can be uint8
         :return: Processed image in float32
         """
 
-        # TODO: set this method to private in the future
         if img.dtype != np.uint8:
             raise Exception("Input Image need to be unit8 but was {}".format(img.dtype))
 
@@ -194,23 +197,23 @@ class Creature:
         """
 
         # does not train on locked perceptron
-        if self.lock:
+        if not self.lock:
+            # make prediction
+            predicted_cat, arr = self.predict(img, mode='multiclass_perceptron_train')
+
+            # update the confusion matrix
+            self.confusion[label, predicted_cat] += 1
+
+            # update weights if the prediction is wrong
+            # if the weights are locked, this become validation
+            if label != predicted_cat:
+                sign = np.zeros((self.num_cat, 1))  # no update for the true negatives
+                sign[predicted_cat] = -1  # punish the false positive
+                sign[label] = 1  # increase the weight for false negative
+                update = np.vstack(tuple([arr for i in range(self.num_cat)])) * sign
+                self.weights = self.weights + lr * update  # do not normalize the weight
+        else:
             pass
-
-        # make prediction
-        predicted_cat, arr = self.predict(img, mode='multiclass_perceptron_train')
-
-        # update the confusion matrix
-        self.confusion[label, predicted_cat] += 1
-
-        # update weights if the prediction is wrong
-        # if the weights are locked, this become validation
-        if label != predicted_cat:
-            sign = np.zeros((4, 1))  # no update for the true negatives
-            sign[predicted_cat] = -1  # punish the false positive
-            sign[label] = 1  # increase the weight for false negative
-            update = np.vstack((arr, arr, arr, arr)) * sign
-            self.weights = self.weights + lr * update  # do not normalize the weight
 
     def validate_perceptron(self, img: np.ndarray, label):
         """
@@ -225,7 +228,7 @@ class Creature:
             raise Exception("Weight need to be locked before validation!")
 
         # make prediction
-        predicted_cat = self.predict(img, label)
+        predicted_cat = self.predict(img)
 
         # update the confusion matrix
         self.confusion[label, predicted_cat] += 1
@@ -239,7 +242,7 @@ class Creature:
         """
 
         # apply filters
-        subpatch = self.process(img)
+        subpatch = self.__process(img)
 
         # check input
         if subpatch.shape != (self.height, self.width):
@@ -255,18 +258,9 @@ class Creature:
             scores = self.weights @ arr
             predicted_cat = np.argmax(scores)
         elif mode == 'binary_perceptron':
-            score = self.weights[0] @ arr
-            if score > 0:
-                predicted_cat = 0
-            else:
-                score = self.weights[1] @ arr
-                if score > 0:
-                    predicted_cat = 3
-                else:
-                    score = self.weights[2] @ arr
-                    predicted_cat = 1 if score > 0 else 2
+            raise Exception("Binary perceptron hasn't been implemented yet")
         else:
-            raise Exception('Mode must be either \'multiclass\' or \'binary\' but was {}'.format(mode))
+            raise Exception('Invalid mode input {}! Check the doc string for valid input format.'.format(mode))
 
         if mode == 'multiclass_perceptron_train':
             return predicted_cat, arr
@@ -290,18 +284,16 @@ class Creature:
         precision = tp / (fn + tp)
 
         # true negative rate (need to be normalized by # of cats - 1)
-        tn_norm = tn / 3
+        tn_norm = tn / (self.num_cat - 1)
         tn_rate = tn_norm / (fp + tn_norm)
 
         # fitness by cat
         fitness_score_by_cat = (precision + tn_rate) * 500
-        self.fitness_score['0'] = fitness_score_by_cat[0]
-        self.fitness_score['1'] = fitness_score_by_cat[1]
-        self.fitness_score['2'] = fitness_score_by_cat[2]
-        self.fitness_score['3'] = fitness_score_by_cat[3]
+        for i in range(fitness_score_by_cat.shape[0]):
+            self.fitness_score[str(i)] = fitness_score_by_cat[i]
 
         # overall score need to be normalized by # of cat
-        self.fitness_score['avg'] = np.sum(precision + tn_rate) * 125  # score ranged from 0 to 1000
+        self.fitness_score['avg'] = np.sum(precision + tn_rate) * 500 / self.num_cat  # score ranged from 0 to 1000
 
     def info(self):
         """
@@ -369,8 +361,6 @@ class PopulationOperator:
     def train_population(population: list, train_data: list, src_dir: str, e, epoch_limit=100, lr=1, silence=False):
         """
         Train the population.
-        # TODO: in the future, implement an epoch report, show avg confusion matrix stats
-        # TODO: in the future, store the midway results in case the training get interrupted
         :param population: population
         :param train_data: list of the training data in tuple format [(id, cat)]. id and cat must be int
         :param e: stopping coefficient: intuitively, how many improvement (%) do you if you made 100 errors in two
@@ -388,7 +378,8 @@ class PopulationOperator:
 
         # train perceptron for each creature
         n = len(population)
-        error_prev, error_curr = np.full((500,), fill_value=100), np.zeros((500,))
+
+        error_prev, error_curr = np.full((n,), fill_value=len(train_data)), np.zeros((n,))
         for i in range(epoch_limit):
 
             # reset the confusion matrix for each creature at the beginning of each training epoch
@@ -403,22 +394,38 @@ class PopulationOperator:
                 img = cv.cvtColor(cv.imread(img_path), cv.COLOR_BGR2GRAY)
                 for creature in population:
                     # TODO: in the future implement more classifier e.g. SVM, KNN etc
-                    creature.train_perceptron_multiclass(img=img, label=label, lr=lr)  # train perceptron
+                    # train perceptron pass if locked
+                    if creature.lock:
+                        continue
+                    else:
+                        creature.train_perceptron_multiclass(img=img, label=label, lr=lr)
 
             # early stop
+            locked_counter = 0
             for k, creature in enumerate(population):
                 if not creature.lock:
-                    error_curr[k] = n - np.sum(creature.confusion.diagonal())
+                    error_curr[k] = len(train_data) - np.sum(creature.confusion.diagonal())
                     # intuitively, theta is how many improvement do you need for
-                    theta = abs(error_curr[k] - error_prev[k]) * 2 / ((error_prev[k] + error_curr[k]) + 10e-6)
-                    if theta < e and i > 5:
+                    theta = abs(error_curr[k] - error_prev[k]) * 2 / ((error_prev[k] + error_curr[k]) + 1e-6)
+                    if theta < e and i > 3:
                         creature.lock_weights()
-                        print("Creature {} weights locked at epoch {}. Error {}".format(k, i, error_curr[k]/n))
+                        locked_counter += 1
+                        delta = round((error_curr[k]-error_prev[k])/(error_prev[k] + 1e-6), 2)
+                        err = round(error_curr[k]/len(train_data), 2)
+                        print("Creature {} locked at epoch {}. Error rate {} Delta {} Theta {}".format(k, i, err,
+                                                                                                       delta, theta))
                     error_prev[k] = error_curr[k]
+                else:
+                    locked_counter += 1
+            remain_num_creature = n - locked_counter
+            print("{} unlocked creatures remain".format(remain_num_creature))
 
             # report for the current epoch
-            if not silence:
+            if not silence and remain_num_creature > 0:
                 PopulationOperator.report(population)
+            else:
+                print("No remaining creatures need to be trained.")
+                break
 
         # when training is done, lock the weights of each creature
         for creature in population:
@@ -447,8 +454,6 @@ class PopulationOperator:
         """
 
         # reset the confusion matrix for each creature at the beginning of each training epoch
-        # TODO: confusion matrix does not need to be updated/reset during the training period
-        # TODO: or it does need to be reset to provide report on per training iteration
         PopulationOperator.reset_population_confusion(population)
 
         # validate on the holding data
@@ -471,24 +476,22 @@ class PopulationOperator:
     @staticmethod
     def eliminate_population(population: list, mode, t=0.25):
         """
-        # TODO: compare two strategy
-        # TODO: strategy - 0: eliminate lowest t by overall fitness score
-        # TODO: strategy - 1: eliminate lowest t by keeping top p% of good performer from each cat
-        # TODO: strategy - 1 should always give a good solution as they will be boosted at the end
-        # TODO: uninformative prior -> keep top (1 - sqrt(sqrt(t))) from each class
-        # TODO: strategy - 2: combine two -> keep t -> alpha portion of t from top performer rest from each class
         Eliminate the underperformed creatures in place.
         Due to the current fitness score set up, the validating data need to be balanced, otherwise it could be bias
         to the dominate cat.
         :param population: population of creatures
-        :param mode: 0: eliminate overall bad performer by threshold; 1: keep % of the good performer by each cat
+        :param mode: 0: eliminate overall bad performer by threshold; 1: for each class, keep top (1 - sqrt(
+        sqrt(t))).
         :param t: threshold
-        :return:
+        :return: void
         """
+
+        # num_cat
+        num_cat = population[0].num_cat
 
         # remove the last
         if mode == '0':
-            population.sort(key=lambda x: x.fitness_score['overall'], reverse=True)  # O(nlgn)
+            population.sort(key=lambda x: x.fitness_score['avg'], reverse=True)  # O(nlgn)
             n = int(len(population) * t)
             for i in range(n):
                 population.pop()  # pop last item is O(1)
@@ -496,7 +499,7 @@ class PopulationOperator:
             p = np.sqrt(np.sqrt(t))
             keep_num = int(round(len(population) * (1 - p)))
             collector = []
-            for i in range(4):
+            for i in range(num_cat):
                 cat = str(i)
                 population.sort(key=lambda x: x.fitness_score[cat], reverse=True)
                 for gene in population[:keep_num + 1]:
@@ -536,6 +539,7 @@ class PopulationOperator:
         :return: the parents indexes in tuple
         """
 
+        num_cat = population[0].num_cat
         p_idx = [-1, -1]
         n = len(population)
 
@@ -545,8 +549,8 @@ class PopulationOperator:
             idx2 = random.randrange(n)
 
             # Tournament based on random criteria
-            criteria = random.randrange(5)
-            if criteria == 4:
+            criteria = random.randrange(num_cat + 1)
+            if criteria == num_cat:
                 criteria = 'avg'
             else:
                 criteria = str(criteria)
@@ -563,8 +567,8 @@ class PopulationOperator:
     def cross(parent1: Creature, parent2: Creature, cross_rate, mutate_rate):
         """
         Cross operation. It is possible to create children that is longer than 8.
-        # TODO: if the creature is too long, it might not be a good thing.
-        # TODO: because it is possible that there are children with duplicated gene (could be a bad thing)
+        Usually a long creature will be more likely to be eliminated because it tends to perform bad (lost too much
+        information)
         :param parent1: first parent
         :param parent2: secondary parent
         :param cross_rate: cross over rate
@@ -602,8 +606,6 @@ class PopulationOperator:
         :param population:
         :return:
         """
-
-        # TODO: confusion matrix does not need to be updated/reset during the training period
         for creature in population:
             creature.reset_confusion()
 
@@ -658,20 +660,27 @@ class PopulationOperator:
         :param population:
         :return:
         """
-        precision = np.array([0, 0, 0, 0], dtype=np.float32)
-        recall = np.array([0, 0, 0, 0], dtype=np.float32)
+
+        num_cat = population[0].num_cat
+        precision = np.zeros((num_cat,), dtype=np.float32)
+        recall = np.zeros((num_cat,), dtype=np.float32)
         for creature in population:
             tp = creature.confusion.diagonal()  # tp on diagonal
             fp = np.sum(creature.confusion, axis=0) - tp  # fp are each column sum minus the tp
             fn = np.sum(creature.confusion, axis=1) - tp  # fn are each row sum minus the tp
-            temp_precision = np.round(tp / (fp + tp + 0.001), 4)  # in case the nan value
-            temp_recall = np.round(tp / (tp + fn + 0.001), 4)  # in case the nan value
+            temp_precision = np.round(tp / (fp + tp + 0.001), num_cat)  # in case the nan value
+            temp_recall = np.round(tp / (tp + fn + 0.001),  num_cat)  # in case the nan value
             precision = np.maximum(temp_precision, precision)
             recall = np.maximum(temp_recall, recall)
-        print("{:>10}: {:>10} {:>10} {:>10} {:>10}".format("Class", 0, 1, 2, 3))
-        print("{:>10}: {:>10} {:>10} {:>10} {:>10}".format("Precision", precision[0], precision[1],
-                                                           precision[2], precision[3]))
-        print("{:>10}: {:>10} {:>10} {:>10} {:>10}".format("Recall", recall[0], recall[1], recall[2],
-                                                           recall[3]))
+        line1 = "{:>10}".format("Class")
+        line2 = "{:>10}".format("Precision")
+        line3 = "{:>10}".format("Recall")
+        for i in range(num_cat):
+            line1 += "{:>10}".format(i)
+            line2 += "{:>10}".format(precision[i])
+            line3 += "{:>10}".format(recall[i])
+        print(line1)
+        print(line2)
+        print(line3)
         print("-------------------------------------------------------\n")
 
