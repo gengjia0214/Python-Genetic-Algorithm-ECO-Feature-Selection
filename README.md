@@ -28,6 +28,8 @@ Currently the implementation is for my own research so it is specialized for cla
 
 11/1:   Added a method to save & load the params into/from json file
 
+11/4:   Refactored the framework. Now should work with any defined number of classes.
+
 ## Dev. Plan
 
 This framework is currently under development for my research project. The framework was (and will continue to be) tested on my research project dataset (full dataset will not be released at least in the next two years).
@@ -37,6 +39,7 @@ The current weak classifier is multiclass perceptron, regularized simply by earl
 - implement MIRA to regularize the perceptron.
 - implement more intepretable weak classifier: logistic regression, which will be compatible for SAMME.R boosting algorithm
 - implement a stronger classifier as weak classifier: SVM
+- implement the hierarchical classification strategy: A* or not? -> A or not? -> a or not?
 
 
 ## Introduction
