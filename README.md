@@ -30,6 +30,8 @@ Currently the implementation is for my own research so it is specialized for cla
 
 11/4:   Refactored the framework. Now should work with any defined number of classes.
 
+11/11:  Changed the img processing pipeline from img -> cropped patch -> processed patch to img -> processed img -> cropped patch for better compatibility,
+
 ## Dev. Plan
 
 This framework is currently under development for my research project. The framework was (and will continue to be) tested on my research project dataset (full dataset will not be released at least in the next two years).
