@@ -27,7 +27,13 @@
 
 11/4:   Refactored the framework. Now should work with any defined number of classes.
 
-11/11:  Changed the img processing pipeline from img -> cropped patch -> processed patch to img -> processed img -> cropped patch for better compatibility,
+11/11:  Changed the img processing pipeline from img -> cropped patch -> processed patch to img -> processed img -> cropped patch for better compatibility
+
+11/16:  Refactored method with Enum
+
+11/21:  Refactored the perceptron, now use sklearn packages instead of scratch model.
+
+11/22:  Added a small gauss number to the fitness score to prevent unstable behaviour. Now the result will be identical if using fixed random seed.
 
 ## Dev. Plan
 
