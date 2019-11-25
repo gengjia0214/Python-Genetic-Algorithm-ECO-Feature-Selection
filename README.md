@@ -4,7 +4,6 @@
 
 @email: jxg570@miami.edu  
 
-@website: https://www.linkedin.com/in/jia-geng/
 
 ## Dev Log 
 
@@ -57,7 +56,7 @@ Genetic programming provides an efficient way to combine specialized basic image
 
 __Creature__: Creature is the basic ECO feature extraction unit. Creatures are constructed with randomly generated feature filters, and randomly generated coordinates for cropping an image. They are able to crop the input image and apply compound features on the subimage to extract the image features. Creatures can be trained with perceptron/SVN/etc. so that they will become a weak classifier. Here, the creature was implemented as an python object class. The field contains variables such as feature filter functions (chromosomes), cropping coordinates, weights, confusion matrix, etc so that it will be capable of provide essenstial computational functions.
 
-__Chromosomes__: A chromosome is a list of image features.
+__Chromosomes__: A chromosome is a list of image feature extractors.
 
 __Generation__: A generation is a batch of creatures, e.g. 500 randomly generated creatures. 
 
@@ -80,10 +79,48 @@ __B. Boosting__
 
 Adaboost the weak classifers. 
 
+### Example
+
+__1 - Data Preparation__
+
+- Put your image data named with integer id (__.png format__, e.g. 1.png, 2.png. 3.png) into a folder. Image must be
+ in same size.
+- You need to encode the image category (label) into 0, 1, 2, 3 etc.
+- For training/testing/validation data, you need to prepare the data as a list of tuples. E.g. `[(img1_id, img1_label
+), (img2_id, img2_label), ...]`. 
+- The program will read each tuple and find the corresponding image using the image id and the image src folder
+ directory you provide. The label will be feed into the model as ground truth for training or testing. 
+
+__2 - Weak Classifier Training__
+
+
+```
+from src.ga import PopulationOperator as po
+
+# prepare your  data and your img folder directory
+train_data = [...]  # for training weak classifier
+hol_data = [...]    # for validating the weak classifier and eliminate the bad performer
+boost_data = [...]  # for train the booster, you can also use train_data + hol_data for training the booster
+img_src = '/path/to/img/folder'
+
+
+# create a new populations of weak classifier. Assume your images are in 49x49
+# use 500 weak classifiers, the more classifiers you have, the more time will be needed to train the model
+first_generation = po.new_population(img_shape=(49, 49), num=500)
+
+# train the weak classifiers
+# e is a parameter for early stopping, epoch limit is the maximum number of epoch
+po.train_population(first_generation, train_data, img_src, e=0.025, epoch_limit=100)
+
+#
+
+```
+
+
 ## What kind of data does it work well with?
 
 This method tend to converge on some sensitive sub-area of an image along with some useful feature extractor. Intuitively, if the object of interest always locate on the center of the image, this method should be able to work stablely and nicely. 
-Besides, this method provides highly intepertable classifiers. 
+Besides, this method provides highly interpretable classifiers. 
 
 This method achieved very high accuracy for some early time dataset, e.g. Caltech101. But this framework might not work well on the more challenging datasets, especially when the object of interest does not have a certain location pattern in the image (no reports are available). 
 
