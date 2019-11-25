@@ -35,11 +35,9 @@ This framework is currently under development for my research project. The frame
 
 The current weak classifier is multiclass perceptron, regularized simply by early stopping. During the boosting (SAMME), the prediction vote will be ecoded in: 1 for predicted class and -1/(C-1) for other classes. One drawback for the multi-class perceptron is that it assume each class is independed to each other including the boosting stage.
  
-- implement MIRA to regularize the perceptron.
 - implement visualization function 
-- implement more intepretable weak classifier: logistic regression, which will be compatible for SAMME.R boosting algorithm
-- implement a stronger classifier as weak classifier: SVM
-- implement the hierarchical classification strategy: A* or not? -> A or not? -> a or not?
+- implement non-linear SVM 
+- clean up the depreciated code
 
 
 ## Introduction
