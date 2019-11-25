@@ -1,4 +1,3 @@
-from scipy.stats import invgamma
 import numpy as np
 import cv2 as cv
 import random
@@ -10,18 +9,13 @@ import random
 Dev Log
 10/15   Current version only support grayscale
 10/16   17 Transformers implemented
-10/17   Changed the input/param format requirements: input & param all must be float32
+10/17   Changed the input/param format requirements: input & param all must be float
 10/18   Implemented a super class for better reporting the params
 10/18   Added height param. But the random threshold is still only bounded by width
 10/24   Fixed an error cause by the census transformation which will crop the border of the image. Pad image by 1. 
-10/24   Used 1e-6 instead of 0 as the lower bound for normalization and log transformation for stability
+10/24   Used 1e-8 instead of 0 as the lower bound for normalization and log transformation for stability
 11/1    Refactored some methods. Added a decode method that make the params compatible for json
 """
-
-
-# TODO: Hough Lines and Hough Circles could also be useful. But need to figure out a way to integrate
-# TODO: Gabor Filter could be useful
-# TODO: Adaptive Threshold C param
 
 
 class Transformer:
@@ -61,11 +55,11 @@ class Transformer:
         return self.params
 
     @staticmethod
-    def get_tfm(width, height, gene):
+    def get_tfm(img_width, img_height, gene):
         """
         Get a tfm
-        :param width: img width
-        :param height: img height
+        :param img_width: img width
+        :param img_height: img height
         :param gene: gene code: -1 means random
         :return:
         """
@@ -74,43 +68,41 @@ class Transformer:
             gene = random.randrange(1, 18)
 
         if gene == 1:
-            x = AdaptiveThreshold(width=width, height=height)
+            x = AdaptiveThreshold(width=img_width, height=img_height)
         elif gene == 2:
-            x = CannyEdge(width=width, height=height)
+            x = CannyEdge(width=img_width, height=img_height)
         elif gene == 3:
-            x = CensusTransformation(width=width, height=height)
+            x = CensusTransformation(width=img_width, height=img_height)
         elif gene == 4:
-            x = CLAHistogram(width=width, height=height)
+            x = CLAHistogram(width=img_width, height=img_height)
         elif gene == 5:
-            x = HistogramEqualization(width=width, height=height)
+            x = HistogramEqualization(width=img_width, height=img_height)
         elif gene == 6:
-            x = DistanceTransformation(width=width, height=height)
+            x = DistanceTransformation(width=img_width, height=img_height)
         elif gene == 7:
-            x = Dilate(width=width, height=height)
+            x = Dilate(width=img_width, height=img_height)
         elif gene == 8:
-            x = Erode(width=width, height=height)
+            x = Erode(width=img_width, height=img_height)
         elif gene == 9:
-            x = DifferenceGaussian(width=width, height=height)
+            x = DifferenceGaussian(width=img_width, height=img_height)
         elif gene == 10:
-            x = GaussianBlur(width=width, height=height)
+            x = GaussianBlur(width=img_width, height=img_height)
         elif gene == 11:
-            x = Gradient(width=width, height=height)
+            x = Gradient(width=img_width, height=img_height)
         elif gene == 12:
-            x = HarrisCorner(width=width, height=height)
+            x = HarrisCorner(width=img_width, height=img_height)
         elif gene == 13:
-            x = IntegralTransformation(width=width, height=height)
+            x = IntegralTransformation(width=img_width, height=img_height)
         elif gene == 14:
-            x = LaplacianEdge(width=width, height=height)
+            x = LaplacianEdge(width=img_width, height=img_height)
         elif gene == 15:
-            x = Log(width=width, height=height)
+            x = Log(width=img_width, height=img_height)
         elif gene == 16:
-            x = MediumBlur(width=width, height=height)
+            x = MediumBlur(width=img_width, height=img_height)
         elif gene == 17:
-            x = SquareRoot(width=width, height=height)
+            x = SquareRoot(width=img_width, height=img_height)
         elif gene == 18:
-            x = Gabor(width=width, height=height)
-        elif gene == 19:
-            x = HoughCircle(width=width, height=height)
+            x = Gabor(width=img_width, height=img_height)
         else:
             raise Exception("Invalid Gene Number {}".format(gene))
 
@@ -126,6 +118,7 @@ class AdaptiveThreshold(Transformer):
         """
         Constructor, initialize params randomly
         :param width: image size
+        :param height: image height
         """
         Transformer.__init__(self, width, height)
         self.code = 1
@@ -154,12 +147,12 @@ class AdaptiveThreshold(Transformer):
         """
         Process the img
         :param img:
-        :return: masked img in float32 format
+        :return: masked img in float format
         """
-        if img.dtype == np.float32:
+        if img.dtype == np.float:
             img_8u = (img * 255).astype(np.uint8)
         else:
-            raise Exception("Input should be {} but was {}".format(np.float32, img.dtype))
+            raise Exception("Input should be {} but was {}".format(np.float, img.dtype))
 
         decoded_params = self.decode_params()
 
@@ -223,10 +216,10 @@ class CannyEdge(Transformer):
         :return: Edged Image
         """
 
-        if img.dtype == np.float32:
+        if img.dtype == np.float:
             img_8u = (img * 255).astype(np.uint8)
         else:
-            raise Exception("Input should be {} but was {}".format(np.float32, img.dtype))
+            raise Exception("Input should be {} but was {}".format(np.float, img.dtype))
 
         thresh, _ = cv.threshold(img_8u, thresh=0, maxval=255, type=(cv.THRESH_BINARY + cv.THRESH_OTSU))
         mask = cv.Canny(img_8u, threshold1=int(thresh * 0.1), threshold2=int(thresh * self.params[0]))
@@ -255,8 +248,8 @@ class CensusTransformation(Transformer):
         :return: census transformed image
         """
 
-        if img.dtype != np.float32:
-            raise Exception("Input should be {} but was {}".format(np.float32, img.dtype))
+        if img.dtype != np.float:
+            raise Exception("Input should be {} but was {}".format(np.float, img.dtype))
 
         img = cv.copyMakeBorder(img, 1, 1, 1, 1, cv.BORDER_CONSTANT, None, 0)
 
@@ -275,7 +268,7 @@ class CensusTransformation(Transformer):
         for u, v in offsets:
             census = (census << 1) | (img[v:v + h - 2, u:u + w - 2] >= cp)
 
-        return (census / 255).astype(np.float32)
+        return (census / 255).astype(np.float)
 
 
 class CLAHistogram(Transformer):
@@ -316,15 +309,15 @@ class CLAHistogram(Transformer):
         :return:
         """
 
-        if img.dtype == np.float32:
+        if img.dtype == np.float:
             img_8u = (img * 255).astype(np.uint8)
         else:
-            raise Exception("Input should be {} but was {}".format(np.float32, img.dtype))
+            raise Exception("Input should be {} but was {}".format(np.float, img.dtype))
 
         clahe = cv.createCLAHE(clipLimit=self.params[0], tileGridSize=(self.params[1], self.params[1]))
         img = clahe.apply(img_8u, None)
 
-        return (img / 255).astype(np.float32)
+        return (img / 255).astype(np.float)
 
 
 class HistogramEqualization(Transformer):
@@ -338,12 +331,12 @@ class HistogramEqualization(Transformer):
 
     @staticmethod
     def transform(img: np.ndarray):
-        if img.dtype == np.float32:
+        if img.dtype == np.float:
             img_8u = (img * 255).astype(np.uint8)
         else:
-            raise Exception("Input should be {} but was {}".format(np.float32, img.dtype))
+            raise Exception("Input should be {} but was {}".format(np.float, img.dtype))
         img = cv.equalizeHist(img_8u, None)
-        return (img / 255).astype(np.float32)
+        return (img / 255).astype(np.float)
 
 
 class DistanceTransformation(Transformer):
@@ -383,10 +376,10 @@ class DistanceTransformation(Transformer):
         :return: distance transformed image
         """
 
-        if img.dtype == np.float32:
+        if img.dtype == np.float:
             img_8u = (img * 255).astype(np.uint8)
         else:
-            raise Exception("Input should be {} but was {}".format(np.float32, img.dtype))
+            raise Exception("Input should be {} but was {}".format(np.float, img.dtype))
 
         # algorithm decide threshold
         _, img = cv.threshold(img_8u, 0, 1.0, cv.THRESH_BINARY | cv.THRESH_OTSU)
@@ -394,10 +387,10 @@ class DistanceTransformation(Transformer):
         # the dist image will be normalized and convert to uint8
 
         decoded = self.decode_params()
-        img = cv.distanceTransform(img, decoded[0], decoded[1], dstType=cv.CV_32F)
+        img = cv.distanceTransform(img, decoded[0], decoded[1], dstType=cv.CV_64F)
 
         # normalization
-        img = cv.normalize(img, None, 1e-6, 1.0, cv.NORM_MINMAX, cv.CV_32F)
+        img = cv.normalize(img, None, 1e-8, 1.0, cv.NORM_MINMAX, cv.CV_64F)
         return img
 
     def decode_params(self):
@@ -452,8 +445,8 @@ class Dilate(Transformer):
         :return: dilated image
         """
 
-        if img.dtype != np.float32:
-            raise Exception("Input should be {} but was {}".format(np.float32, img.dtype))
+        if img.dtype != np.float:
+            raise Exception("Input should be {} but was {}".format(np.float, img.dtype))
 
         img = cv.dilate(img, kernel=(3, 3), iterations=self.params[0])  # use default kernel size the 8 neighbors
         return img
@@ -493,8 +486,8 @@ class Erode(Transformer):
         :return: dilated image
         """
 
-        if img.dtype != np.float32:
-            raise Exception("Input should be {} but was {}".format(np.float32, img.dtype))
+        if img.dtype != np.float:
+            raise Exception("Input should be {} but was {}".format(np.float, img.dtype))
 
         img = cv.erode(img, kernel=(3, 3), iterations=self.params[0])  # use default kernel size the 8 neighbors
         return img
@@ -507,7 +500,8 @@ class DifferenceGaussian(Transformer):
         Constructor.
         Two random param: sigma value and the aspect ratio between two sigmas
         The rule is that the kernel size need to be 3 * sigma while smaller than the patch size
-        :param width:
+        :param width: image width
+        :param height: image height
         """
 
         Transformer.__init__(self, width, height)
@@ -552,11 +546,11 @@ class DifferenceGaussian(Transformer):
         :return: difference of gaussian
         """
 
-        if img.dtype != np.float32:
-            raise Exception("Input should be {} but was {}".format(np.float32, img.dtype))
+        if img.dtype != np.float:
+            raise Exception("Input should be {} but was {}".format(np.float, img.dtype))
         img_a = cv.GaussianBlur(img, ksize=(self.params[1], self.params[1]), sigmaX=self.params[0])
         img_b = cv.GaussianBlur(img, ksize=(self.params[3], self.params[3]), sigmaX=self.params[2])
-        img = cv.normalize(img_b - img_a, None, 1e-6, 1.0, cv.NORM_MINMAX, cv.CV_32F)
+        img = cv.normalize(img_b - img_a, None, 1e-8, 1.0, cv.NORM_MINMAX, cv.CV_64F)
         return img
 
 
@@ -572,6 +566,7 @@ class GaussianBlur(Transformer):
         The kernel size is three times of the sigma
         The kernel size should not be larger than the patch
         :param width: image width
+        :param height: image height
         """
         Transformer.__init__(self, width, height)
         self.code = 10
@@ -599,8 +594,8 @@ class GaussianBlur(Transformer):
         :return: blurred image
         """
 
-        if img.dtype != np.float32:
-            raise Exception("Input should be {} but was {}".format(np.float32, img.dtype))
+        if img.dtype != np.float:
+            raise Exception("Input should be {} but was {}".format(np.float, img.dtype))
 
         img = cv.GaussianBlur(img, ksize=(self.params[1], self.params[1]), sigmaX=self.params[0])
         return img
@@ -615,7 +610,8 @@ class Gradient(Transformer):
         """
         Constructor.
         One random param decide which gradient filter to use
-        :param width:
+        :param width: image width
+        :param height: image height
         """
 
         Transformer.__init__(self, width, height)
@@ -713,11 +709,11 @@ class Gradient(Transformer):
         :return: normalized gradient image
         """
 
-        if img.dtype != np.float32:
-            raise Exception("Input should be {} but was {}".format(np.float32, img.dtype))
+        if img.dtype != np.float:
+            raise Exception("Input should be {} but was {}".format(np.float, img.dtype))
         decoded_param = self.decode_params()
         img = cv.filter2D(img, -1, kernel=decoded_param)
-        img = cv.normalize(img, None, 1e-6, 1.0, cv.NORM_MINMAX, cv.CV_32F)
+        img = cv.normalize(img, None, 1e-8, 1.0, cv.NORM_MINMAX, cv.CV_64F)
         return img
 
     def decode_params(self):
@@ -740,6 +736,7 @@ class HarrisCorner(Transformer):
         Constructor
         Three random param: block size, kernel size, k
         :param width: image width
+        :param height: image height
         """
         Transformer.__init__(self, width, height)
         self.code = 12
@@ -770,11 +767,11 @@ class HarrisCorner(Transformer):
         :return: harris corner, normalized
         """
 
-        if img.dtype != np.float32:
-            raise Exception("Input should be {} but was {}".format(np.float32, img.dtype))
+        if img.dtype != np.float:
+            raise Exception("Input should be {} but was {}".format(np.float, img.dtype))
 
-        img = cv.cornerHarris(img, blockSize=self.params[0], ksize=self.params[1], k=self.params[2])
-        img = cv.normalize(img, None, 1e-6, 1.0, cv.NORM_MINMAX, cv.CV_32F)
+        img = cv.cornerHarris(img.astype(np.float32), blockSize=self.params[0], ksize=self.params[1], k=self.params[2])
+        img = cv.normalize(img, None, 1e-8, 1.0, cv.NORM_MINMAX, cv.CV_64F)
         return img
 
 
@@ -786,7 +783,8 @@ class IntegralTransformation(Transformer):
     def __init__(self, width, height):
         """
         Constructor
-        :param width:
+        :param width: image width
+        :param height: image height
         """
 
         Transformer.__init__(self, width, height)
@@ -800,10 +798,10 @@ class IntegralTransformation(Transformer):
         :return: normalized integral
         """
 
-        if img.dtype != np.float32:
-            raise Exception("Input should be {} but was {}".format(np.float32, img.dtype))
+        if img.dtype != np.float:
+            raise Exception("Input should be {} but was {}".format(np.float, img.dtype))
 
-        img = cv.normalize(cv.integral(img), None, 1e-6, 1.0, cv.NORM_MINMAX, cv.CV_32F)[1:, 1:]
+        img = cv.normalize(cv.integral(img), None, 1e-8, 1.0, cv.NORM_MINMAX, cv.CV_64F)[1:, 1:]
         return img
 
 
@@ -816,6 +814,7 @@ class LaplacianEdge(Transformer):
         """
         Constructor
         :param width: image width
+        :param height: image height
         """
 
         Transformer.__init__(self, width, height)
@@ -840,11 +839,11 @@ class LaplacianEdge(Transformer):
         :return: normalized laplacian edges
         """
 
-        if img.dtype != np.float32:
-            raise Exception("Input should be {} but was {}".format(np.float32, img.dtype))
+        if img.dtype != np.float:
+            raise Exception("Input should be {} but was {}".format(np.float, img.dtype))
 
-        img = cv.normalize(cv.Laplacian(img, ddepth=-1, ksize=self.params[0]), None, 1e-6, 1.0, cv.NORM_MINMAX,
-                           cv.CV_32F)
+        img = cv.normalize(cv.Laplacian(img, ddepth=-1, ksize=self.params[0]), None, 1e-8, 1.0, cv.NORM_MINMAX,
+                           cv.CV_64F)
         return img
 
 
@@ -856,7 +855,8 @@ class Log(Transformer):
     def __init__(self, width, height):
         """
         Constructor
-        :param width:
+        :param width: image width
+        :param height: image height
         """
 
         Transformer.__init__(self, width, height)
@@ -871,14 +871,14 @@ class Log(Transformer):
         :return:
         """
 
-        if img.dtype == np.float32:
+        if img.dtype == np.float:
             img_8u = (img * 255).astype(np.uint8)
         else:
-            raise Exception("Input should be {} but was {}".format(np.float32, img.dtype))
+            raise Exception("Input should be {} but was {}".format(np.float, img.dtype))
 
-        contrast = 255 / (np.log(img_8u.max() + 1 + 1e-6))  # in case divide by 0
-        img = contrast * np.log(1 + 1e-6 + img_8u.astype(np.float32))
-        img = cv.normalize(img, None, 1e-6, 1.0, cv.NORM_MINMAX, cv.CV_32F)
+        contrast = 255 / (np.log(img_8u.max() + 1 + 1e-8))  # in case divide by 0
+        img = contrast * np.log(1 + 1e-8 + img_8u.astype(np.float))
+        img = cv.normalize(img, None, 1e-8, 1.0, cv.NORM_MINMAX, cv.CV_64F)
         return img
 
 
@@ -891,6 +891,7 @@ class MediumBlur(Transformer):
         """
         Constructor
         :param width: image width
+        :param height: image height
         """
 
         Transformer.__init__(self, width, height)
@@ -914,14 +915,16 @@ class MediumBlur(Transformer):
         :return: smoothed image
         """
 
-        if img.dtype != np.float32:
-            raise Exception("Input should be {} but was {}".format(np.float32, img.dtype))
+        if img.dtype != np.float:
+            raise Exception("Input should be {} but was {}".format(np.float, img.dtype))
 
         if self.params[0] <= 5:
+            img = img.astype(np.float32)
             img = cv.medianBlur(img, ksize=self.params[0])
+            img = img.astype(np.float)
         else:
             img_8u = (img * 255).astype(np.uint8)
-            img = (cv.medianBlur(img_8u, ksize=self.params[0]) / 255).astype(np.float32)
+            img = (cv.medianBlur(img_8u, ksize=self.params[0]) / 255).astype(np.float)
         return img
 
 
@@ -934,6 +937,7 @@ class SquareRoot(Transformer):
         """
         Constructor
         :param width: image width
+        :param height: image height
         """
 
         Transformer.__init__(self, width, height)
@@ -944,15 +948,14 @@ class SquareRoot(Transformer):
         """
         Must be performed on float points [0, 1] so that it have meaningful effect.
         Increase the contrast
-        :param self:
         :param img:
         :return:
         """
-        if img.dtype != np.float32:
-            raise Exception("Input should be {} but was {}".format(np.float32, img.dtype))
+        if img.dtype != np.float:
+            raise Exception("Input should be {} but was {}".format(np.float, img.dtype))
 
         # make sure there are no funny number
-        img[img < 0] = 1e-6
+        img[img < 0] = 1e-8
 
         return np.sqrt(img)
 
@@ -1012,15 +1015,15 @@ class Gabor(Transformer):
         """
 
         # check input
-        if img.dtype != np.float32:
-            raise Exception("Input should be {} but was {}".format(np.float32, img.dtype))
+        if img.dtype != np.float:
+            raise Exception("Input should be {} but was {}".format(np.float, img.dtype))
 
         # apply kernel
         kernel = cv.getGaborKernel(ksize=(self.params[0], self.params[0]), sigma=self.params[1], theta=self.params[
-                2], lambd=self.params[3], gamma=self.params[4], psi=0, ktype=cv.CV_32F)
+                2], lambd=self.params[3], gamma=self.params[4], psi=0, ktype=cv.CV_64F)
         img = cv.filter2D(img, -1, kernel=kernel)
 
-        img = cv.normalize(img, None, 1e-6, 1.0, cv.NORM_MINMAX, cv.CV_32F)
+        img = cv.normalize(img, None, 1e-8, 1.0, cv.NORM_MINMAX, cv.CV_64F)
         return img
 
 #
@@ -1064,8 +1067,8 @@ class Gabor(Transformer):
 #     def transform(self, img):
 #
 #         # check input
-#         if img.dtype != np.float32:
-#             raise Exception("Input should be {} but was {}".format(np.float32, img.dtype))
+#         if img.dtype != np.float:
+#             raise Exception("Input should be {} but was {}".format(np.float, img.dtype))
 #
 #         img_8u = (img * 255).astype(np.uint8)
 #         thresh, _ = cv.threshold(img_8u, thresh=0, maxval=255, type=(cv.THRESH_BINARY + cv.THRESH_OTSU))
@@ -1077,8 +1080,3 @@ class Gabor(Transformer):
 #         max_r = max(3, int(self.params[3] * min(self.width, self.height)) + 1)
 #         circles = cv.HoughCircles(image=img_8u, method=cv.HOUGH_GRADIENT, dp=1, minDist=min_dist, param1=param1,
 #                                   param2=param2, minRadius=min_r, maxRadius=max_r)
-
-3
-
-
-
