@@ -1,4 +1,4 @@
-from src.models.eco import transformer as tfm
+from src import transformer as tfm
 from sklearn.linear_model import LogisticRegression as Logit
 from sklearn.svm import LinearSVC as SVm
 from sklearn.linear_model import Perceptron as Pct
