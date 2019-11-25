@@ -7,8 +7,6 @@
 
 ## Dev Log 
 
-Currently the implementation is for my own research so it is specialized for classify 4 different categories (encoded into 0, 1, 2, 3). 
-
 10/15:  Init
 
 10/17:  Implemented the Creature Class (still need to implement the perceptron)
