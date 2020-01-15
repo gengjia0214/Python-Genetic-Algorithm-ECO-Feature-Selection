@@ -40,15 +40,15 @@
 
 This is a genetic programming based computational framework for constructing Evolution-COnstructed (ECO) features for object detection. This method was initially proposed by __Lillywhite et al. (2013)__ and extended by __Zayyan et al. (2018)__. 
 
-Genetic programming provides an efficient way to combine specialized basic image feature filters to build a more complex image feature extractors. The compound feature extractors can be used for training weak classifiers such as perceptron, SVM, ANN etc. which can then be boosted to a stronger classifer. 
+Genetic programming using evolutionary strategy to combine the basic image feature filters and select the sub-region of an image for feature extraction. The compound feature extractor can be used for training weak classifiers such as perceptron, SVM, ANN etc., which can be further boosted into a stronger classifer. 
 
 ## How does it work?
 
 ### Some key objects in this framework:
 
-__Creature__: Creature is the basic ECO feature extraction unit. Creatures are constructed with randomly generated feature filters, and randomly generated coordinates for cropping an image. They are able to crop the input image and apply compound features on the subimage to extract the image features. Creatures can be trained with perceptron/SVN/etc. so that they will become a weak classifier. Here, the creature was implemented as an python object class. The field contains variables such as feature filter functions (chromosomes), cropping coordinates, weights, confusion matrix, etc so that it will be capable of provide essenstial computational functions.
+__Creature__: Creature is the basic ECO feature extraction unit. Creatures are constructed with randomly generated feature filters, and randomly generated coordinates for cropping the image. They are able to crop the input image and apply combined features on the imge subregion to extract local features. Creatures can be trained with perceptron/SVM/etc. as weak classifiers. 
 
-__Chromosomes__: A chromosome is a list of image feature extractors.
+__Chromosomes__: A chromosome is a sequence of image feature filters.
 
 __Generation__: A generation is a batch of creatures, e.g. 500 randomly generated creatures. 
 
@@ -58,11 +58,11 @@ __A. Weak Classifiers Generation:__
 
 1 - Init: Start with a large population of creatures (1st generation)
 
-2 - Train: Train all creatures on the training data so they become weak classifiers. Validate all the creatures.
+2 - Train: Train all creatures on the training data. Validate all the creatures on a holdout dataset.
 
-3 - Eliminate: Eliminate the underperformed creatures. The rest become parent candidate pool.
+3 - Eliminate: Eliminate the underperformed creatures based on performance on the holdout set. The rest of creatures will be in the parents pool.
 
-4 - Reproduce: Randomly select a pair of creatures from the parent candidate pool. Cross the paresnts chromosome to generate child creature (reproduce). Each children creature have a small chance to mutate (changing the parameters of the filters). Reproduce enough number of children creature as the next generation.
+4 - Reproduce: Randomly select a pair of creatures from the parents pool. Cross the paresnts chromosome to generate child creature (reproduce). Each children creature have a small chance to mutate (changing the parameters of the filters). Reproduce enough number of children creature as the next generation.
 5 - go to step 2.
 
 From step 2 -> step 4 is one generation. Repeat 10 generations and this genetic framework should be able to select well performed creatures, i.e. weak classifiers.
