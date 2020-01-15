@@ -33,17 +33,7 @@
 
 11/21:  Refactored the perceptron, now use sklearn packages instead of scratch model.
 
-11/22:  Added a small gauss number to the fitness score to prevent unstable behaviour. Now the result will be identical if using fixed random seed.
-
-## Dev. Plan
-
-This framework is currently under development for my research project. The framework was (and will continue to be) tested on my research project dataset (full dataset will not be released at least in the next two years).
-
-The current weak classifier is multiclass perceptron, regularized simply by early stopping. During the boosting (SAMME), the prediction vote will be ecoded in: 1 for predicted class and -1/(C-1) for other classes. One drawback for the multi-class perceptron is that it assume each class is independed to each other including the boosting stage.
- 
-- implement visualization function 
-- implement non-linear SVM 
-- clean up the depreciated code
+11/22:  Added a small gauss number to the fitness score to prevent unstable behaviour. Now the result will be identical if using fixed random seed
 
 
 ## Introduction
@@ -148,6 +138,17 @@ Simply clip the serialized eco model and the boosting params together. `ga.Popul
 The weak classifiers should evolve toward meaningful sub-area of an image and also generate some useful combination of feature filters. Intuitively, if the objects of interest are always at a certain location of the image (E.g. the center), this method should be able to work stablely and nicely. Besides, this method provides highly interpretable classifiers. 
 
 This method achieved good performance for some early-time dataset, e.g. Caltech101 (tested by the orginal author). But this framework might not work well on the more challenging datasets, especially when the object(s) of interest will not appear at certain location of the image (still need to be tested). This method might work well on the moving object proposals detected by the background subtraction algorithms as it can generate bounding boxes with center-located object proposals. One draw back of this method is the slow training and testing speed when the population gets large or image gets large (the evolution does not contribute to better result when population is low). A GPU implementation of both the feature filters and the training algorithms could greatly accelerate this method.
+
+## Dev. Plan
+
+This framework is currently under development for my research project. The framework was (and will continue to be) tested on my research project dataset (full dataset will not be released before the end of 2020).
+
+The current weak classifiers include perceptron, multinomial logistic regression and one-vs-all SVM. For the boosting algorithm (SAMME, implemented at another repo), the prediction vote will be ecoded in: 1 for predicted class and -1/(C-1) for other classes. 
+
+Future plan includes:
+- improve the speed of the framework
+- implement visualization function 
+- try more powerful weak classifers
 
 ## Reference
 
