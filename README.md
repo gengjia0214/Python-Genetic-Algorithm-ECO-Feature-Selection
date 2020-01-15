@@ -80,6 +80,7 @@ From step 2 -> step 4 is one generation. Repeat 10 generations and this genetic 
 __B. Boosting__
 
 Adaboost the weak classifers. 
+Check https://github.com/gengjia0214/Python-Multiclass-AdaBoost-SAMME.git
 
 ### Example
 
@@ -97,37 +98,56 @@ __2 - Weak Classifier Training__
 
 
 ```
-from src.ga import PopulationOperator as po
+from src.ga import PopulationOperator as po, Eliminiation, Model
+import os
 
 # prepare your  data and your img folder directory
-train_data = [...]  # for training weak classifier
-hol_data = [...]    # for validating the weak classifier and eliminate the bad performer
-boost_data = [...]  # for train the booster, you can also use train_data + hol_data for training the booster
 img_src = '/path/to/img/folder'
+dst_dir = 'path/to/dst'
+train_data = [...]  # for training weak classifier
+val_data = [...]    # for validating the weak classifier and eliminate the bad performer
+boost_data = [...]  # for train the booster, you can  use train_data + val_data for training the booster
+num_gen = 10        # 10 generations
+
 
 
 # create a new populations of weak classifier. Assume your images are in 49x49
 # use 500 weak classifiers, the more classifiers you have, the more time will be needed to train the model
-first_generation = po.new_population(img_shape=(49, 49), num=500)
+first_generation = ga.new_population(img_shape=(49, 49), num=500)
 
-# train the weak classifiers
-# e is a parameter for early stopping, epoch limit is the maximum number of epoch
-po.train_population(first_generation, train_data, img_src, e=0.025, epoch_limit=100)
+# train the weak classifiers using genetic algorithms for feature evolution
+# prepare the args (E.g. using the logistic classifier)
+args = {'penalty': penalty, 'solver': 'saga', 'max_iter': 100, 'n_jobs': -1, 'random_state': np.random.RandomState(77), 'multi_class': 'multinomial', "C": c, 'dual': False} 
+model = ga.Model.LOGIT_MUL
+elimination_mode = ga.Elimination.BY_CAT
 
-#
-
+curr_gen = first_gen
+for i in range(num_gen):
+    print("\n======================================================")
+    print("Start Generation {}".format(i))
+    print("======================================================\n")
+    model_log = "{}_fold={}_gen={}.json".format(trial_id, fold, i)
+    out_path = os.path.join(dst_dir, model_log)
+    ga.PopulationOperator.train_population(curr_gen, train_data, img_src, mode=model, args=args,
+                                           silence=silence)
+    ga.PopulationOperator.validate_population(curr_gen, val_data, img_src, mode=model)
+    ga.PopulationOperator.save_population(curr_gen, dst_file=os.path.join(dst_dir, "{}.json".format(i))
+    ga.PopulationOperator.eliminate_population(curr_gen, mode=elimination_mode, t=0.25)
+    curr_gen = ga.PopulationOperator.reproduce(curr_gen, num=500)
 ```
+__3 - Boosting__
 
+Check https://github.com/gengjia0214/Python-Multiclass-AdaBoost-SAMME.git
+The serializtion and de-serialization of the model ensemble was implemented but currently for internal usage only.
+It is fairly easy to modify the SAMME class and implement the serialization and de-serialzation for the ensemble.
+
+Simply clip the serialized eco model and the boosting params together. `ga.PopulationOperator.save_population()` will return the serilized model when `dst_file=None` 
 
 ## What kind of data does it work well with?
 
-This method tend to converge on some sensitive sub-area of an image along with some useful feature extractor. Intuitively, if the object of interest always locate on the center of the image, this method should be able to work stablely and nicely. 
-Besides, this method provides highly interpretable classifiers. 
+The weak classifiers should evolve toward meaningful sub-area of an image and also generate some useful combination of feature filters. Intuitively, if the objects of interest are always at a certain location of the image (E.g. the center), this method should be able to work stablely and nicely. Besides, this method provides highly interpretable classifiers. 
 
-This method achieved very high accuracy for some early time dataset, e.g. Caltech101. But this framework might not work well on the more challenging datasets, especially when the object of interest does not have a certain location pattern in the image (no reports are available). 
-
-This method might work well on the moving object proposals detected by the moving object algorithms, e.g., background subtraction as it can generate proposals with object of interest on the image center. 
-
+This method achieved good performance for some early-time dataset, e.g. Caltech101 (tested by the orginal author). But this framework might not work well on the more challenging datasets, especially when the object(s) of interest will not appear at certain location of the image (still need to be tested). This method might work well on the moving object proposals detected by the background subtraction algorithms as it can generate bounding boxes with center-located object proposals. One draw back of this method is the slow training and testing speed when the population gets large or image gets large (the evolution does not contribute to better result when population is low). A GPU implementation of both the feature filters and the training algorithms could greatly accelerate this method.
 
 ## Reference
 
