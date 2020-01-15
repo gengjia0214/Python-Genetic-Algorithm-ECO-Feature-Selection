@@ -65,7 +65,7 @@ __A. Weak Classifiers Generation:__
 4 - Reproduce: Randomly select a pair of creatures from the parents pool. Cross the paresnts chromosome to generate child creature (reproduce). Each children creature have a small chance to mutate (changing the parameters of the filters). Reproduce enough number of children creature as the next generation.
 5 - go to step 2.
 
-From step 2 -> step 4 is one generation. Repeat 10 generations and this genetic framework should be able to select well performed creatures, i.e. weak classifiers.
+From step 2 -> step 4 is one generation.
 
 __B. Boosting__
 
